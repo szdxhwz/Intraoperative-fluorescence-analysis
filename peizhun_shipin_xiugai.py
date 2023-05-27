@@ -160,7 +160,7 @@ def shipin(openpath,dir,chizichangdu):
                       inliers_current += 1
                       X_inliers.append(x_current)
                       Y_inliers.append(y_current)
-                  #print("当前内点数量={}, 最佳内点数量={},最佳内点比例={}".format(inliers_current, best_inliers_number,best_inliers_number / N))
+                  
               if (inliers_current > best_inliers_number):
                   i=0
                   Pro_current = inliers_current / N       #当前模型的内点比例Pro_current
@@ -206,12 +206,12 @@ def shipin(openpath,dir,chizichangdu):
                 y_med=np.array(y_med)
                 y_med=y_med.flatten()
                 s1[num,:]=y_med
-                #y_med=y_med[y_med>0]
+                
                 if y_med[y_med>0].size == 0:
                     s4[num]=0
                 else:
                     s4[num]=1
-                    #y_med=np.insert(y_med,0,0)
+                    
                     tidu=np.asarray([y_med[i]-y_med[i-1] for i in range(1,len(y_med))])
                     tidu_index=np.where(tidu>0)[0][0]+1
                     x=np.arange(len(y_med))
@@ -269,9 +269,6 @@ def shipin(openpath,dir,chizichangdu):
           kaishijisuan=datetime.now()
           print('---开始计算---',str(kaishijisuan))
           for j,i in enumerate(zhixian):
-          #cv2.rectangle(frame, position_line2, (position_line3[0],i), (255,0,0), 1)
-          # d1=math.sqrt((position_line2[0]-position_line3[0])**2+(position_line2[1]-position_line3[1])**2)
-          # cv2.line(frame, position_line2, position_line3, (255,0,0), 2)
               cv2.circle(frame_1, center=i, radius=2,color=(255, 0, 0), thickness=-1)
               cv2.putText(frame_1,f"{j}cm" , (i[0]+4,i[1]), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 0, 0), 1)
           #cv2.putText(frame,f"{round((int(chizi)/d)*d1,1)}mm" , (position_line3[0]+4,position_line3[1]), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (255, 0, 0), 1)
