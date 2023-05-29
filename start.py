@@ -1,11 +1,11 @@
 import sys
 from PyQt5.QtWidgets import QMainWindow, QApplication, QPushButton, QMessageBox,QFileDialog,QLineEdit,QLabel,QComboBox
-from peizhun_shipin_xiugai import shipin
+from peizhun_shipin_xiugai1 import shipin
 from peizhun_shipin1 import shipin1
 from PyQt5.QtGui import QGuiApplication,QCursor
 from PyQt5.QtCore import Qt
 
-import os
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()

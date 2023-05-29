@@ -12,6 +12,7 @@ import pickle
 import sklearn
 from time import sleep, ctime
 from threading import Thread
+from datetime import datetime 
 
 def process_video(openpath,path,start_frame, length):
     cap = cv2.VideoCapture(openpath)
@@ -38,7 +39,8 @@ def duiqi(dirs1,path1,peizhun_savepath,quzhen_savepath,start,end):
 
 
 def shipin(openpath,dir,chizichangdu):
-  print('---开始---',ctime())
+  kaishi=datetime.now()
+  print('---开始---',str(kaishi))
   quzhen_savepath=dir+'/'+'quzhen'
   folder=os.path.exists(quzhen_savepath)
   if not folder:
@@ -93,7 +95,8 @@ def shipin(openpath,dir,chizichangdu):
 #          new_img = cv2.resize(frame,None,fx=0.3,fy=0.3,interpolation = cv2.INTER_LINEAR)
 #          cv2.imwrite(quzhen_savepath+'/'+str(idx//freq) + ".jpg", new_img)  # 保存图片
 #   cap.release()
-  print('---取帧结束---',ctime())
+  quzhenjieshu=datetime.now()
+  print('---取帧结束---',str(quzhenjieshu),'---耗时---',(quzhenjieshu-kaishi).seconds,'s')
   dirs1=os.listdir(quzhen_savepath+'/')
   dirs1.sort(key=lambda x: int(x.split('.')[0]))
   path1=quzhen_savepath+'/0.jpg'
@@ -120,7 +123,8 @@ def shipin(openpath,dir,chizichangdu):
 #     path3=os.path.join(peizhun_savepath,dirs1[i])
 #     path2=os.path.join(quzhen_savepath,dirs1[i])
 #     peizhun(path1,path2,path3)
-  print('---配准结束---',ctime())
+  peizhunjieshu=datetime.now()
+  print('---配准结束---',str(peizhunjieshu),'---耗时---',(peizhunjieshu-quzhenjieshu).seconds,'s')
   font = {'family' : 'MicroSoft YaHei',
         'weight' : 'bold',
         'size'   : 30}
@@ -201,6 +205,8 @@ def shipin(openpath,dir,chizichangdu):
           zhixian_y=np.arange(position_line2[1],position_line3[1],(position_line3[1]-position_line2[1])/d1*(d/int(chizi)))
           zhixian_y=[int(zhixian_y[i]) for i in range(len(zhixian_y))]
           zhixian=np.hstack((np.array(zhixian_x).reshape(-1,1),np.array(zhixian_y).reshape(-1,1)))
+          kaishijisuan=datetime.now()
+          print('---开始计算---',str(kaishijisuan))
           for j,i in enumerate(zhixian):
           #cv2.rectangle(frame, position_line2, (position_line3[0],i), (255,0,0), 1)
           # d1=math.sqrt((position_line2[0]-position_line3[0])**2+(position_line2[1]-position_line3[1])**2)
@@ -313,6 +319,9 @@ def shipin(openpath,dir,chizichangdu):
                   plt.axvline(x=x[index])
           plt.savefig(dir+"/duodian_fenxi.jpg")
           plt.show()
+          jisuanjieshu=datetime.now()
+          print('---计算结束---',str(jisuanjieshu),'---耗时---',(jisuanjieshu-kaishijisuan).seconds,'s')
+          print('---总耗时---',(jisuanjieshu-kaishi).seconds,'s')
                   #plt.savefig(f"F:/ygszfx/mfx/2whq{gs}.jpg")
 
   global chizi,dirs,frame_1

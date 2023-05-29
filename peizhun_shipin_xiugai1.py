@@ -13,6 +13,7 @@ import sklearn
 from datetime import datetime 
 from threading import Thread
 from concurrent.futures import ThreadPoolExecutor
+from multiprocessing import Pool
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -39,7 +40,114 @@ def duiqi(dirs1,path1,peizhun_savepath,quzhen_savepath,start,end):
         path3=os.path.join(peizhun_savepath,dirs1[i])
         path2=os.path.join(quzhen_savepath,dirs1[i])
         peizhun(path1,path2,path3)
-
+def func1(x, x0,b,c,d,e):
+      return np.piecewise(x, [x < x0, x >= x0], [lambda x:0, 
+                                    lambda x:np.exp(-b*x0)*c-np.exp(-b*x)*c+np.exp(-d*x)*e])
+def ransac1(x,y,rate,Iter_Number,DisT,ProT,qsd):
+    N=len(x)
+    best_inliers_number =0
+    i=0
+    p0=qsd,0.1,1,0.1,1
+    while True:
+        x_2c= random.sample(list(x), int(N*rate))
+        y_2c=y[x_2c]
+        try:
+            popt, pcov = curve_fit(func1, x_2c, y_2c,p0,maxfev=800000)
+        except Exception:
+            continue
+        finally:
+            X_inliers = []
+            Y_inliers = []
+            inliers_current = 0 #当前模型的内点数量
+            i+=1
+            for j in range(N):
+                x_current = x[j]
+                y_current = y[j]
+                dis_current = np.abs(y_current-func1(x_current,*popt))
+                if (dis_current <= DisT):
+                    inliers_current += 1
+                    X_inliers.append(x_current)
+                    Y_inliers.append(y_current)
+                
+            if (inliers_current > best_inliers_number):
+                i=0
+                Pro_current = inliers_current / N       #当前模型的内点比例Pro_current
+                best_inliers_number = inliers_current   #更新最优内点的数量
+                best_x0,best_b,best_c,best_d,best_e = popt  #更新模型参数
+            if ((best_inliers_number / N) > ProT):
+                break
+            if i>0.9*Iter_Number:
+                x0_qz=math.ceil(best_x0)
+                y1=y[:x0_qz+1]
+                y2=y[x0_qz+1:]
+                y=np.append(y1,y2[y2>0])
+                N=len(y)
+                x=np.arange(N)
+            if i> Iter_Number:
+                break
+    return best_x0,best_b,best_c,best_d,best_e
+  
+def jisuan(fenduanindex,dirs_len,list1):
+    fenduanindexlen=len(fenduanindex)
+    s1=np.zeros(shape=(fenduanindexlen,dirs_len))
+    s2=np.zeros(shape=(fenduanindexlen,dirs_len))
+    s3=np.zeros(shape=(fenduanindexlen,12))
+    s4=np.zeros(shape=fenduanindexlen)
+    for num,wz in enumerate(fenduanindex):
+            y_point=[]
+            hl=int(wz[1]-2)
+            hh=int(wz[1]+3)
+            wl=int(wz[0]-2)
+            wh=int(wz[0]+3)
+            point=np.zeros(shape=(dirs_len))
+            p=0
+            for i in range(dirs_len):
+                for j in range(hl,hh):
+                    for h in range(wl,wh):
+                        if list1[j,h,0,i]>=35 and list1[j,h,0,i]<=77:
+                            p+=list1[j,h,1,i]
+                p1=p/25
+                point[i]=p1
+                p=0
+            
+            y_med = signal.medfilt(point, kernel_size=13)
+            y_med=np.array(y_med)
+            y_med=y_med.flatten()
+            s1[num,:]=y_med
+            
+            if y_med[y_med>0].size == 0:
+                s4[num]=0
+            else:
+                s4[num]=1
+                
+                tidu=np.asarray([y_med[i]-y_med[i-1] for i in range(1,len(y_med))])
+                tidu_index=np.where(tidu>0)[0][0]+1
+                x=np.arange(len(y_med))
+                x0,b,c,d_x,e=ransac1(x,y_med,0.8,400,3,0.8,tidu_index)
+                
+                for i in x:
+                    y_point.append(func1(i,x0,b,c,d_x,e))
+                s2[num,:]=y_point
+                index=np.where(y_point>=(max(y_point)*0.99))[0][0]
+                y_point_new=y_point[tidu_index-1:index+1]
+                y_12=int(y_point[index])/2
+                for i in range(len(y_point_new)):
+                    if y_point_new[i] >= y_12:
+                        t12max=round((i/y_point_new[i]*y_12)/3,2)
+                        break
+                Fmax=round(int(y_point[index]),1)
+                Tmax=round(int(x[index]-x0)/3,2)
+                Slope=round(Fmax/Tmax,2)
+                TR=round(t12max/Tmax,2)
+                with open('./model.pickle', 'rb') as f:
+                    model = pickle.load(f)
+                score=round(model.predict([[Tmax,Slope,t12max,TR]])[0],1)
+                if score>100:
+                    score=100
+                elif score<0:
+                    score=0
+                s3[num,:]=[score,Tmax,Fmax,Slope,t12max,TR,x0,b,c,d_x,e,index]
+    return s1,s2,s3,s4
 
 def shipin(openpath,dir,chizichangdu):
   kaishi=datetime.now()
@@ -132,114 +240,7 @@ def shipin(openpath,dir,chizichangdu):
         'weight' : 'bold',
         'size'   : 30}
 
-  def func1(x, x0,b,c,d,e):
-      return np.piecewise(x, [x < x0, x >= x0], [lambda x:0, 
-                                    lambda x:np.exp(-b*x0)*c-np.exp(-b*x)*c+np.exp(-d*x)*e])
-  def ransac1(x,y,rate,Iter_Number,DisT,ProT,qsd):
-      N=len(x)
-      best_inliers_number =0
-      i=0
-      p0=qsd,0.1,1,0.1,1
-      while True:
-          x_2c= random.sample(list(x), int(N*rate))
-          y_2c=y[x_2c]
-          try:
-              popt, pcov = curve_fit(func1, x_2c, y_2c,p0,maxfev=800000)
-          except Exception:
-              continue
-          finally:
-              X_inliers = []
-              Y_inliers = []
-              inliers_current = 0 #当前模型的内点数量
-              i+=1
-              for j in range(N):
-                  x_current = x[j]
-                  y_current = y[j]
-                  dis_current = np.abs(y_current-func1(x_current,*popt))
-                  if (dis_current <= DisT):
-                      inliers_current += 1
-                      X_inliers.append(x_current)
-                      Y_inliers.append(y_current)
-                  
-              if (inliers_current > best_inliers_number):
-                  i=0
-                  Pro_current = inliers_current / N       #当前模型的内点比例Pro_current
-                  best_inliers_number = inliers_current   #更新最优内点的数量
-                  best_x0,best_b,best_c,best_d,best_e = popt  #更新模型参数
-              if ((best_inliers_number / N) > ProT):
-                  break
-              if i>0.9*Iter_Number:
-                  x0_qz=math.ceil(best_x0)
-                  y1=y[:x0_qz+1]
-                  y2=y[x0_qz+1:]
-                  y=np.append(y1,y2[y2>0])
-                  N=len(y)
-                  x=np.arange(N)
-              if i> Iter_Number:
-                  break
-      return best_x0,best_b,best_c,best_d,best_e
   
-  def jisuan(fenduanindex,dirs_len):
-      fenduanindexlen=len(fenduanindex)
-      s1=np.zeros(shape=(fenduanindexlen,dirs_len))
-      s2=np.zeros(shape=(fenduanindexlen,dirs_len))
-      s3=np.zeros(shape=(fenduanindexlen,12))
-      s4=np.zeros(shape=fenduanindexlen)
-      for num,wz in enumerate(fenduanindex):
-                y_point=[]
-                hl=int(wz[1]-2)
-                hh=int(wz[1]+3)
-                wl=int(wz[0]-2)
-                wh=int(wz[0]+3)
-                point=np.zeros(shape=(dirs_len))
-                p=0
-                for i in range(dirs_len):
-                    for j in range(hl,hh):
-                        for h in range(wl,wh):
-                            if list1[j,h,0,i]>=35 and list1[j,h,0,i]<=77:
-                                p+=list1[j,h,1,i]
-                    p1=p/25
-                    point[i]=p1
-                    p=0
-                
-                y_med = signal.medfilt(point, kernel_size=13)
-                y_med=np.array(y_med)
-                y_med=y_med.flatten()
-                s1[num,:]=y_med
-                
-                if y_med[y_med>0].size == 0:
-                    s4[num]=0
-                else:
-                    s4[num]=1
-                    
-                    tidu=np.asarray([y_med[i]-y_med[i-1] for i in range(1,len(y_med))])
-                    tidu_index=np.where(tidu>0)[0][0]+1
-                    x=np.arange(len(y_med))
-                    x0,b,c,d_x,e=ransac1(x,y_med,0.8,400,3,0.8,tidu_index)
-                    
-                    for i in x:
-                        y_point.append(func1(i,x0,b,c,d_x,e))
-                    s2[num,:]=y_point
-                    index=np.where(y_point>=(max(y_point)*0.99))[0][0]
-                    y_point_new=y_point[tidu_index-1:index+1]
-                    y_12=int(y_point[index])/2
-                    for i in range(len(y_point_new)):
-                        if y_point_new[i] >= y_12:
-                            t12max=round((i/y_point_new[i]*y_12)/3,2)
-                            break
-                    Fmax=round(int(y_point[index]),1)
-                    Tmax=round(int(x[index]-x0)/3,2)
-                    Slope=round(Fmax/Tmax,2)
-                    TR=round(t12max/Tmax,2)
-                    with open('./model.pickle', 'rb') as f:
-                        model = pickle.load(f)
-                    score=round(model.predict([[Tmax,Slope,t12max,TR]])[0],1)
-                    if score>100:
-                        score=100
-                    elif score<0:
-                        score=0
-                    s3[num,:]=[score,Tmax,Fmax,Slope,t12max,TR,x0,b,c,d_x,e,index]
-      return s1,s2,s3,s4
 
   def OnMouseAction(event, x, y, flags, param):
       global frame_1, position_line,position_line1,position_line2,position_line3,position_line4,position_line5,d,d1,d2
@@ -378,20 +379,18 @@ def shipin(openpath,dir,chizichangdu):
           else:
             plt.rc("font", **font)
             plt.figure(figsize=(40,20*xianduan_len), dpi=80)
-            fenduan=xianduan_len//3
-            pool = ThreadPoolExecutor(max_workers=4)
-            future1 = pool.submit(jisuan, zhixian[:fenduan,:],dirs_len)
-            future2 = pool.submit(jisuan, zhixian[fenduan:fenduan*2,:],dirs_len)
-            future3 = pool.submit(jisuan, zhixian[fenduan*2:,:],dirs_len)
-            #future4 = pool.submit(jisuan, zhixian[fenduan*3:,:],dirs_len)
-            s5=np.concatenate((future1.result()[0],future2.result()[0],future3.result()[0]),axis=0)
-            s6=np.concatenate((future1.result()[1],future2.result()[1],future3.result()[1]),axis=0)
-            s7=np.concatenate((future1.result()[2],future2.result()[2],future3.result()[2]),axis=0)
-            s8=np.concatenate((future1.result()[3],future2.result()[3],future3.result()[3]),axis=0)
-            print("future1线程的状态:" + str(future1.done())) 
-            print("future1线程的状态:" + str(future2.done()))
-            print("future1线程的状态:" + str(future3.done()))
-            #print("future1线程的状态:" + str(future4.done()))
+            fenduan=xianduan_len//2
+            pool = Pool(processes=2)
+            result1= pool.apply_async(jisuan, (zhixian[:fenduan,:],dirs_len,list1)).get()
+            result2= pool.apply_async(jisuan, (zhixian[fenduan:,:],dirs_len,list1)).get()
+            
+            pool.close() # 关闭进程池，不能再添加进程
+            pool.join()
+            s5=np.concatenate((result1[0],result2[0]),axis=0)
+            s6=np.concatenate((result1[1],result2[1]),axis=0)
+            s7=np.concatenate((result1[2],result2[2]),axis=0)
+            s8=np.concatenate((result1[3],result2[3]),axis=0)
+        
             x_scatter=np.arange(dirs_len)
             for num,wz in enumerate(zhixian):
                 y_yuan=s5[num,:]
@@ -450,7 +449,6 @@ def shipin(openpath,dir,chizichangdu):
                     plt.axvline(x=x_scatter[int(s7[num,9])])
             plt.savefig(dir+"/duodian_fenxi.jpg")
             plt.show()
-            pool.shutdown()
           jisuanjieshu=datetime.now()
           print('---计算结束---',str(jisuanjieshu),'---耗时---',(jisuanjieshu-kaishijisuan).seconds,'s')
           print('---总耗时---',(jisuanjieshu-kaishi).seconds,'s')
